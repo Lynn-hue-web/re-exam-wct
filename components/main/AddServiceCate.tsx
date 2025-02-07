@@ -41,28 +41,32 @@ const Notification: React.FC<NotificationProps> = ({ message, type, id, onClose 
 };
 
 const ServiceCategory = () => {
-  // Load categories from localStorage on initial render
-  const [categories, setCategories] = useState<ServiceCategory[]>(() => {
-    const savedCategories = localStorage.getItem('serviceCategories');
-    return savedCategories ? JSON.parse(savedCategories) : [];
-  });
-
+  const [isClient, setIsClient] = useState(false);
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [newCategory, setNewCategory] = useState("");
   const [editingCategory, setEditingCategory] = useState<ServiceCategory | null>(null);
   const [editedName, setEditedName] = useState("");
-  
-  // Changed notifications to an array to support multiple notifications
   const [notifications, setNotifications] = useState<NotificationProps[]>([]);
 
-  // Update localStorage whenever categories change
+  // Ensure this runs only on client-side
   useEffect(() => {
-    localStorage.setItem('serviceCategories', JSON.stringify(categories));
-  }, [categories]);
+    setIsClient(true);
+    const savedCategories = localStorage.getItem('serviceCategories');
+    if (savedCategories) {
+      setCategories(JSON.parse(savedCategories));
+    }
+  }, []);
 
-  // Add notification with unique ID
+  // Update localStorage when categories change
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('serviceCategories', JSON.stringify(categories));
+    }
+  }, [categories, isClient]);
+
   const addNotification = (message: string, type: 'success' | 'error' | 'warning') => {
     const newNotification: NotificationProps = {
-      id: Date.now(), // unique identifier
+      id: Date.now(),
       message,
       type,
       onClose: removeNotification
@@ -70,40 +74,33 @@ const ServiceCategory = () => {
     setNotifications(prev => [...prev, newNotification]);
   };
 
-  // Remove a specific notification
   const removeNotification = (id: number) => {
     setNotifications(prev => prev.filter(notification => notification.id !== id));
   };
 
-  // Add Category
   const handleAddCategory = () => {
     if (newCategory.trim() === "") return;
 
     const newEntry = { id: Date.now(), name: newCategory };
     setCategories([...categories, newEntry]);
     
-    // Show success notification
     addNotification(`Category "${newCategory}" added successfully!`, 'success');
     
     setNewCategory("");
   };
 
-  // Delete Category
   const handleDeleteCategory = (id: number) => {
     const deletedCategory = categories.find(category => category.id === id);
     setCategories(categories.filter((category) => category.id !== id));
     
-    // Show notification for deletion
     addNotification(`Category "${deletedCategory?.name}" deleted!`, 'warning');
   };
 
-  // Edit Category
   const handleEditCategory = (category: ServiceCategory) => {
     setEditingCategory(category);
     setEditedName(category.name);
   };
 
-  // Update Category
   const handleUpdateCategory = () => {
     if (!editingCategory || editedName.trim() === "") return;
 
@@ -113,16 +110,19 @@ const ServiceCategory = () => {
       )
     );
 
-    // Show notification for update
     addNotification(`Category updated to "${editedName}"!`, 'success');
 
     setEditingCategory(null);
     setEditedName("");
   };
 
+  // Render nothing on server to prevent hydration mismatch
+  if (!isClient) {
+    return null;
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 relative">
-      {/* Notifications */}
       <div className="fixed top-4 right-4 z-50 space-y-2">
         {notifications.map((notification) => (
           <Notification 
@@ -132,11 +132,10 @@ const ServiceCategory = () => {
         ))}
       </div>
 
-      {/* Rest of the component remains the same */}
       <div className="p-8">
         <div className="flex items-center mb-6">
           <FaLayerGroup className="mr-4 text-4xl text-blue-600" />
-          <h2 className="text-3xl font-bold">Service Categorie</h2>
+          <h2 className="text-3xl font-bold">Service Categories</h2>
         </div>
 
         <div className="space-y-4">
@@ -157,7 +156,6 @@ const ServiceCategory = () => {
         </div>
       </div>
 
-      {/* Categories List Section - remains the same as previous implementation */}
       <div>
         <div className="p-8 overflow-y-auto max-h-[600px]">
           <h3 className="text-2xl font-semibold mb-6">

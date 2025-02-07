@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import { UserButton } from "@clerk/nextjs";
+import { FaCheckCircle, FaExclamationTriangle, FaTimes } from "react-icons/fa";
 
 interface BookingData {
   date: string;
@@ -14,24 +15,79 @@ interface BookingData {
   userName: string;
 }
 
-const initialFormData = {
-  date: "",
-  time: "",
-  serviceName: "",
-  userId: "",
-  userEmail: "",
-  userName: "",
-  bookedAt: ""
+interface NotificationProps {
+  message: string;
+  type: 'success' | 'error' | 'warning';
+  id: number;
+  onClose: (id: number) => void;
+}
+
+const Notification: React.FC<NotificationProps> = ({ message, type, id, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose(id);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [id, onClose]);
+
+  const bgColors = {
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    warning: 'bg-yellow-500'
+  };
+
+  const icons = {
+    success: <FaCheckCircle className="text-2xl" />,
+    error: <FaTimes className="text-2xl" />,
+    warning: <FaExclamationTriangle className="text-2xl" />
+  };
+
+  return (
+    <div
+      className={`fixed top-4 right-4 z-50 ${bgColors[type]} text-white px-6 py-4 rounded-xl shadow-lg transform transition-all duration-300 ease-in-out animate-bounce`}
+    >
+      <div className="flex items-center space-x-3">
+        {icons[type]}
+        <span className="text-md font-semibold">{message}</span>
+      </div>
+    </div>
+  );
 };
 
 const BookAppointment = () => {
   const { user } = useUser();
   const [bookings, setBookings] = useState<BookingData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCreating, setIsCreating] = useState(false);
+
   const [isEditing, setIsEditing] = useState(false);
   const [editingBooking, setEditingBooking] = useState<BookingData | null>(null);
-  const [formData, setFormData] = useState(initialFormData);
+
+  const [notifications, setNotifications] = useState<NotificationProps[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState<BookingData | null>(null);
+
+  const addNotification = (message: string, type: 'success' | 'error' | 'warning') => {
+    const newNotification: NotificationProps = {
+      id: Date.now(),
+      message,
+      type,
+      onClose: removeNotification
+    };
+    setNotifications(prev => [...prev, newNotification]);
+  };
+
+  const removeNotification = (id: number) => {
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
+  };
+
+  // New function to check if booking is new
+  const isNewBooking = (booking: BookingData) => {
+    const bookingDate = new Date(booking.bookedAt);
+    const currentDate = new Date();
+    const hoursDifference = (currentDate.getTime() - bookingDate.getTime()) / (1000 * 3600);
+    return hoursDifference <= 24; // Consider a booking new if booked within the last 24 hours
+  };
 
   useEffect(() => {
     fetchBookings();
@@ -40,36 +96,17 @@ const BookAppointment = () => {
   const fetchBookings = () => {
     try {
       const bookingHistory = JSON.parse(localStorage.getItem('bookingHistory') || '[]');
-      const userBookings = user 
+      const userBookings = user
         ? bookingHistory.filter((booking: BookingData) => booking.userId === user.id)
         : [];
       setBookings(userBookings);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setBookings([]);
+      addNotification('Failed to fetch bookings', 'error');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCreate = () => {
-    if (!user) return;
-
-    const newBooking = {
-      ...formData,
-      userId: user.id,
-      userEmail: user.primaryEmailAddress?.emailAddress || '',
-      userName: `${user.firstName} ${user.lastName}` || user.username || '',
-      bookedAt: new Date().toISOString()
-    };
-
-    const allBookings = JSON.parse(localStorage.getItem('bookingHistory') || '[]');
-    allBookings.push(newBooking);
-    localStorage.setItem('bookingHistory', JSON.stringify(allBookings));
-    
-    setFormData(initialFormData);
-    setIsCreating(false);
-    fetchBookings();
   };
 
   const handleUpdate = () => {
@@ -91,17 +128,44 @@ const BookAppointment = () => {
     setIsEditing(false);
     setEditingBooking(null);
     fetchBookings();
+    addNotification('Booking updated successfully!', 'success');
   };
 
   const handleDelete = (booking: BookingData) => {
-    if (window.confirm('Are you sure you want to delete this booking?')) {
-      const allBookings = JSON.parse(localStorage.getItem('bookingHistory') || '[]');
-      const updatedBookings = allBookings.filter((b: BookingData) => 
-        !(b.userId === user?.id && b.bookedAt === booking.bookedAt)
-      );
-      localStorage.setItem('bookingHistory', JSON.stringify(updatedBookings));
-      fetchBookings();
-    }
+    const allBookings = JSON.parse(localStorage.getItem('bookingHistory') || '[]');
+    const updatedBookings = allBookings.filter((b: BookingData) =>
+      !(b.userId === user?.id && b.bookedAt === booking.bookedAt)
+    );
+    localStorage.setItem('bookingHistory', JSON.stringify(updatedBookings));
+    fetchBookings();
+    setShowDeleteConfirm(false);
+    setBookingToDelete(null);
+    addNotification('Booking deleted successfully!', 'warning');
+  };
+
+  const confirmDelete = (booking: BookingData) => {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white p-8 rounded-lg w-full max-w-md">
+          <h2 className="text-2xl font-bold mb-6">Confirm Delete</h2>
+          <p className="mb-6">Are you sure you want to delete this booking?</p>
+          <div className="flex gap-4">
+            <button
+              onClick={() => handleDelete(booking)}
+              className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -159,7 +223,6 @@ const BookAppointment = () => {
             </button>
             <button
               onClick={() => {
-                setIsCreating(false);
                 setIsEditing(false);
                 setEditingBooking(null);
               }}
@@ -175,25 +238,29 @@ const BookAppointment = () => {
 
   return (
     <div className="flex bg-gray-50 min-h-screen overflow-x-hidden p-10 pl-64">
+      {/* Notifications */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {notifications.map((notification) => (
+          <Notification
+            key={notification.id}
+            {...notification}
+          />
+        ))}
+      </div>
+
       {/* User Profile Section */}
       <div className="fixed top-4 right-4 flex items-center gap-4">
         <div className="flex flex-col items-end">
           <span className="text-sm text-gray-600">{user?.primaryEmailAddress?.emailAddress}</span>
           <span className="font-medium">{user?.firstName || user?.username}</span>
         </div>
-        <UserButton afterSignOutUrl="/"/>
+        <UserButton afterSignOutUrl="/" />
       </div>
 
       <div className="pl-[70px] w-full">
         <div className="max-w-6xl mx-auto p-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-800">My Appointments</h1>
-            <button
-              onClick={() => setIsCreating(true)}
-              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              New Booking
-            </button>
           </div>
 
           {loading ? (
@@ -233,8 +300,13 @@ const BookAppointment = () => {
                   {bookings.map((booking, index) => (
                     <tr key={index}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
                           {booking.serviceName}
+                          {isNewBooking(booking) && (
+                            <span className="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">
+                              New
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -263,7 +335,10 @@ const BookAppointment = () => {
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDelete(booking)}
+                            onClick={() => {
+                              setBookingToDelete(booking);
+                              setShowDeleteConfirm(true);
+                            }}
                             className="text-red-600 hover:text-red-900"
                           >
                             Delete
@@ -279,16 +354,6 @@ const BookAppointment = () => {
         </div>
       </div>
 
-      {/* Create Modal */}
-      {isCreating && (
-        <BookingForm
-          data={formData}
-          setData={setFormData}
-          onSubmit={handleCreate}
-          title="New Booking"
-        />
-      )}
-
       {/* Edit Modal */}
       {isEditing && editingBooking && (
         <BookingForm
@@ -298,6 +363,9 @@ const BookAppointment = () => {
           title="Edit Booking"
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && bookingToDelete && confirmDelete(bookingToDelete)}
     </div>
   );
 };
