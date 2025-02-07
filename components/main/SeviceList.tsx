@@ -65,7 +65,7 @@ const ServiceList = () => {
     const endHour = 14; // 2 PM
 
     for (let hour = startHour; hour <= endHour; hour++) {
-      for (let minutes of [0, 30]) {
+      for (const minutes of [0, 30]) {
         const timeString = `${hour === 12 ? 12 : hour % 12}:${minutes === 0 ? '00' : '30'} ${hour >= 12 ? 'pm' : 'am'}`;
         
         // If it's today, only show future time slots

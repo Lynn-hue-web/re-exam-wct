@@ -22,6 +22,13 @@ interface NotificationProps {
   onClose: (id: number) => void;
 }
 
+interface BookingFormProps {
+  data: BookingData;
+  setData: React.Dispatch<React.SetStateAction<BookingData | null>>;
+  onSubmit: () => void;
+  title: string;
+}
+
 const Notification: React.FC<NotificationProps> = ({ message, type, id, onClose }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -55,6 +62,8 @@ const Notification: React.FC<NotificationProps> = ({ message, type, id, onClose 
   );
 };
 
+
+
 const BookAppointment = () => {
   const { user } = useUser();
   const [bookings, setBookings] = useState<BookingData[]>([]);
@@ -81,14 +90,6 @@ const BookAppointment = () => {
     setNotifications(prev => prev.filter(notification => notification.id !== id));
   };
 
-  // New function to check if booking is new
-  const isNewBooking = (booking: BookingData) => {
-    const bookingDate = new Date(booking.bookedAt);
-    const currentDate = new Date();
-    const hoursDifference = (currentDate.getTime() - bookingDate.getTime()) / (1000 * 3600);
-    return hoursDifference <= 24; // Consider a booking new if booked within the last 24 hours
-  };
-
   useEffect(() => {
     fetchBookings();
   }, [user]);
@@ -108,6 +109,7 @@ const BookAppointment = () => {
       setLoading(false);
     }
   };
+
 
   const handleUpdate = () => {
     if (!editingBooking || !user) return;
@@ -176,7 +178,7 @@ const BookAppointment = () => {
     });
   };
 
-  const BookingForm = ({ data, setData, onSubmit, title }: any) => (
+  const BookingForm: React.FC<BookingFormProps> = ({ data, setData, onSubmit, title }) => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white p-8 rounded-lg w-full max-w-md">
         <h2 className="text-2xl font-bold mb-6">{title}</h2>
@@ -223,6 +225,7 @@ const BookAppointment = () => {
             </button>
             <button
               onClick={() => {
+
                 setIsEditing(false);
                 setEditingBooking(null);
               }}
@@ -300,13 +303,8 @@ const BookAppointment = () => {
                   {bookings.map((booking, index) => (
                     <tr key={index}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                        <div className="text-sm font-medium text-gray-900">
                           {booking.serviceName}
-                          {isNewBooking(booking) && (
-                            <span className="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">
-                              New
-                            </span>
-                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -342,8 +340,7 @@ const BookAppointment = () => {
                             className="text-red-600 hover:text-red-900"
                           >
                             Delete
-                          </button>
-                        </div>
+                          </button></div>
                       </td>
                     </tr>
                   ))}
